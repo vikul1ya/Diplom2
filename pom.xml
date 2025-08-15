@@ -27,7 +27,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- JUnit4 (без старого hamcrest-core) -->
+        <!-- JUnit4  -->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -85,7 +85,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Jackson (уже есть, но можно оставить) -->
+        <!-- Jackson  -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
