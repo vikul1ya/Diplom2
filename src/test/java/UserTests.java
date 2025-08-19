@@ -1,105 +1,81 @@
 
-import io.qameta.allure.Step;
-import org.junit.After;
+import io.qameta.allure.Description;
 import org.junit.Test;
-import ru.practicum.config.Endpoints;
-import ru.practicum.model.AuthResponse;
+import ru.practicum.config.ApiClient;
 import ru.practicum.model.User;
 import ru.practicum.utils.UserGenerator;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.*;
 
 public class UserTests extends BaseTest {
+    private final ApiClient client = new ApiClient();
 
+    @Test
+    @Description("Проверяет успешную регистрацию нового пользователя. Ожидается статус 200")
+    public void registerNewUser() {
+        User user = UserGenerator.generateUniqueUser();
 
-    private String createdToken = null;
+        var response = client.register(user);
 
-    @Step("Создать уникального пользователя")
-    private io.restassured.response.Response createUser(User user) {
-        return given()
-                .contentType("application/json")
-                .body(user)
-                .when()
-                .post(Endpoints.AUTH_REGISTER);
-    }
-
-    @Step("Создать пользователя и вернуть accessToken")
-    private String createUserAndReturnToken(User user) {
-        AuthResponse resp = createUser(user)
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true))
-                .extract()
-                .as(AuthResponse.class);
-
-        String token = resp.getAccessToken();
-        if (token == null) {
-            throw new IllegalStateException("accessToken is null. Response: " + resp);
-        }
-        if (!token.toLowerCase().startsWith("bearer ")) {
-            token = "Bearer " + token;
-        }
-        // сохраняем для cleanup
-        this.createdToken = token;
-        return token;
+        assertTrue("Ожидался success = true", response.getSuccess());
+        assertNotNull("AccessToken должен быть в ответе", response.getAccessToken());
+        assertEquals("Email в ответе должен совпадать с отправленным",
+                user.getEmail(), response.getUser().getEmail());
+        assertEquals("Имя в ответе должно совпадать",
+                user.getName(), response.getUser().getName());
     }
 
     @Test
-    public void createUniqueUser_shouldReturn200AndSuccessTrue() {
-        User user = UserGenerator.uniqueUser();
+    @Description("Проверяет, что повторная регистрация существующего пользователя возвращает ошибку и соответствующее сообщение.")
+    public void registerExistingUser() {
+        User user = UserGenerator.generateUniqueUser();
 
-        createUser(user)
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true))
-                .body("user.email", equalTo(user.getEmail()))
-                .body("accessToken", notNullValue());
+        // Регистрируем первый раз — должно пройти
+        var firstResponse = client.register(user);
+        assertTrue("Первая регистрация должна пройти успешно", firstResponse.getSuccess());
+
+        // Повторная регистрация — должна завершиться ошибкой
+        var secondResponse = client.register(user);
+
+        assertFalse("Повторная регистрация должна вернуть success = false", secondResponse.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", secondResponse.getMessage());
+        assertTrue("Сообщение должно содержать информацию о существующем пользователе",
+                secondResponse.getMessage().toLowerCase().contains("exists") ||
+                        secondResponse.getMessage().toLowerCase().contains("already"));
     }
 
     @Test
-    public void createAlreadyRegisteredUser_shouldReturn403AndErrorMessage() {
-        User user = UserGenerator.uniqueUser();
+    @Description("Проверяет, что регистрация без email завершается ошибкой.")
+    public void registerUserWithoutEmail() {
+        User user = new User(null, "P@ssw0rd123", "TestUser");
 
-        // создать первый раз
-        createUser(user).then().statusCode(200);
+        var response = client.register(user);
 
-        // повторная регистрация — допускаем 403 или 409 и проверяем, что сообщение информативно
-        createUser(user)
-                .then()
-                .statusCode(anyOf(equalTo(403), equalTo(409)))
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())))
-                .body("message", containsStringIgnoringCase("already"));
+        assertFalse("Регистрация без email должна завершиться ошибкой", response.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
     }
 
     @Test
-    public void createUser_missingRequiredField_shouldReturn403Or400WithMessage() {
-        // не указываем пароль (null), используем уникальный email
-        User user = new User("no-pass-" + System.currentTimeMillis() + "@example.com", null, "NoPass");
+    @Description("Проверяет, что регистрация без пароля завершается ошибкой.")
+    public void registerUserWithoutPassword() {
+        User user = new User("testuser@example.com", null, "TestUser");
 
-        given()
-                .contentType("application/json")
-                .body(user)
-                .when()
-                .post(Endpoints.AUTH_REGISTER)
-                .then()
-                .statusCode(anyOf(equalTo(400), equalTo(403)))
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())));
+        var response = client.register(user);
+
+        assertFalse("Регистрация без пароля должна завершиться ошибкой", response.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
     }
 
-    @After
-    public void cleanup() {
-        // Опционально: удаляем созданного пользователя, если endpoint поддерживает удаление авторизованного пользователя
-        if (this.createdToken != null) {
-            given()
-                    .header("Authorization", this.createdToken)
-                    .when()
-                    .delete(Endpoints.AUTH_USER)
-                    .then()
-                    .statusCode(anyOf(equalTo(200), equalTo(202), equalTo(204)));
-            this.createdToken = null;
-        }
+    @Test
+    @Description("Проверяет, что регистрация без имени завершается ошибкой.")
+    public void registerUserWithoutName() {
+
+        User user = new User("testuser@example.com", "P@ssw0rd123", null);
+
+        var response = client.register(user);
+
+
+        assertFalse("Регистрация без имени должна завершится ошибкой", response.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
     }
 }

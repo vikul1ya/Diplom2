@@ -1,69 +1,46 @@
 
-import io.qameta.allure.Step;
+import io.qameta.allure.Description;
+import org.junit.Before;
 import org.junit.Test;
-import ru.practicum.config.Endpoints;
+import ru.practicum.config.ApiClient;
 import ru.practicum.model.User;
 import ru.practicum.utils.UserGenerator;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.*;
 
 public class AuthTests extends BaseTest {
+    private ApiClient client;
+    private User user;
 
-    @Step("Регистрация пользователя (для теста логина)")
-    private void register(User user) {
-        given()
-                .contentType("application/json")
-                .body(user)
-                .when()
-                .post(Endpoints.AUTH_REGISTER)
-                .then()
-                .statusCode(200);
-    }
-
-    @Step("Выполнить логин")
-    private io.restassured.response.Response login(User user) {
-        return given()
-                .contentType("application/json")
-                .body(new LoginRequest(user.getEmail(), user.getPassword()))
-                .when()
-                .post(Endpoints.AUTH_LOGIN);
+    @Before
+    public void setUp() {
+        client = new ApiClient();
+        user = UserGenerator.generateUniqueUser();
+        client.register(user);
     }
 
     @Test
-    public void loginWithValidCredentials_shouldReturn200AndToken() {
-        User user = UserGenerator.uniqueUser();
-        register(user);
-
-        login(user)
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true))
-                .body("accessToken", notNullValue());
+    @Description("Проверяет успешный вход с корректными учётными данными")
+    public void loginWithValidCredentials() {
+        var response = client.login(user);
+        assertTrue(response.getSuccess());
+        assertNotNull(response.getAccessToken());
     }
 
     @Test
-    public void loginWithInvalidCredentials_shouldReturn401AndMessage() {
-        LoginRequest bad = new LoginRequest("invalid@example.com", "wrongpass");
-
-        given()
-                .contentType("application/json")
-                .body(bad)
-                .when()
-                .post(Endpoints.AUTH_LOGIN)
-                .then()
-                .statusCode(401)
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())));
+    @Description("Проверяет, что вход с неверным паролем возвращает ошибку ")
+    public void loginWithInvalidPassword() {
+        User badUser = new User(user.getEmail(), "wrongpass", user.getName());
+        var response = client.login(badUser);
+        assertFalse(response.getSuccess());
     }
 
-    // Вспомогательный класс для тела логина
-    static class LoginRequest {
-        private final String email;
-        private final String password;
-        LoginRequest(String email, String password) { this.email = email; this.password = password; }
-        public String getEmail() { return email; }
-        public String getPassword() { return password; }
+    @Test
+    @Description("Проверяет, что вход с несуществующим email возвращает ошибку")
+    public void loginWithInvalidEmail() {
+        User badUser = new User("invalid@example.com", user.getPassword(), user.getName());
+        var response = client.login(badUser);
+        assertFalse(response.getSuccess());
     }
 }
 

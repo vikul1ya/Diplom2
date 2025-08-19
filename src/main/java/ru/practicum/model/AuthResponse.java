@@ -1,49 +1,36 @@
 package ru.practicum.model;
-import java.util.Map;
 
+import lombok.Data;
+
+@Data
 public class AuthResponse {
     private Boolean success;
     private String accessToken;
     private String refreshToken;
-    private Map<String, Object> user;
+    private UserData user;
+    private String message;
 
-    public AuthResponse() {}
+    public Boolean getSuccess() { return success; }
+    public void setSuccess(Boolean success) { this.success = success; }
 
-    public Boolean getSuccess() {
-        return success;
-    }
+    public String getAccessToken() { return accessToken; }
+    public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
 
-    public void setSuccess(Boolean success) {
-        this.success = success;
-    }
+    public String getRefreshToken() { return refreshToken; }
+    public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
 
-    public String getAccessToken() {
-        return accessToken;
-    }
+    public UserData getUser() { return user; }
+    public void setUser(UserData user) { this.user = user; }
 
-    public void setAccessToken(String accessToken) {
-        this.accessToken = accessToken;
-    }
-
-    public String getRefreshToken() {
-        return refreshToken;
-    }
-
-    public void setRefreshToken(String refreshToken) {
-        this.refreshToken = refreshToken;
-    }
-
-    public Map<String, Object> getUser() {
-        return user;
-    }
-
-    public void setUser(Map<String, Object> user) {
-        this.user = user;
-    }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
 
     @Override
     public String toString() {
-        return "AuthResponse{success=" + success + ", accessToken=" + (accessToken != null ? "[PROVIDED]" : "null") + "}";
+        return "AuthResponse{" +
+                "success=" + success +
+                ", accessToken='" + (accessToken != null ? "PROVIDED" : "null") + '\'' +
+                '}';
     }
 }
 

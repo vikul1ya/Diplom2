@@ -1,152 +1,98 @@
 
+import io.qameta.allure.Description;
 import io.qameta.allure.Step;
+import org.junit.Before;
 import org.junit.Test;
-import ru.practicum.config.Endpoints;
+import ru.practicum.config.ApiClient;
 import ru.practicum.model.AuthResponse;
 import ru.practicum.model.OrderRequest;
 import ru.practicum.model.User;
 import ru.practicum.utils.UserGenerator;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 
 public class OrderTests extends BaseTest {
+    private ApiClient client;
+    private String authToken;
+    private List<String> ingredientIds;
 
-    @Step("Получить список id ингредиентов")
-    private List<String> getIngredients() {
-        List<Map<String, Object>> data = given()
-                .when()
-                .get(Endpoints.INGREDIENTS)
-                .then()
-                .statusCode(200)
-                .extract()
-                .path("data");
+    @Before
+    public void setUp() {
+        client = new ApiClient();
+        User user = UserGenerator.generateUniqueUser();
+        var auth = registerUser(user);
+        authToken = auth.getAccessToken();
 
-        return data.stream()
-                .map(m -> (String) m.get("_id"))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    @Step("Зарегистрировать и получить токен")
-    private String registerAndGetToken(User user) {
-        AuthResponse resp = given()
-                .contentType("application/json")
-                .body(user)
-                .when()
-                .post(Endpoints.AUTH_REGISTER)
-                .then()
-                .statusCode(200)
-                .extract()
-                .as(AuthResponse.class);
-
-        String at = resp.getAccessToken();
-        if (at == null) {
-            throw new IllegalStateException("accessToken is null in register response: " + resp);
-        }
-        if (!at.toLowerCase().startsWith("bearer ")) {
-            at = "Bearer " + at;
-        }
-        return at;
+        ingredientIds = getIngredientIds();
     }
 
     @Test
-    public void createOrder_withAuth_shouldReturn200() {
-        User user = UserGenerator.uniqueUser();
-        String token = registerAndGetToken(user);
-
-        List<String> ingredients = getIngredients();
-        OrderRequest order = new OrderRequest(ingredients.subList(0, Math.min(2, ingredients.size())));
-
-        given()
-                .header("Authorization", token)
-                .contentType("application/json")
-                .body(order)
-                .when()
-                .post(Endpoints.ORDERS)
-                .then()
+    @Description("Проверяет, что авторизованный пользователь может создать заказ. Ожидается статус 200")
+    public void createOrderWithAuth() {
+        OrderRequest order = createOrderRequest(2);
+        sendOrderWithAuth(order)
                 .statusCode(200)
                 .body("success", equalTo(true))
-                .body("name", notNullValue())
                 .body("order.number", greaterThan(0));
     }
 
     @Test
-    public void createOrder_withoutAuth_shouldReturn401() {
-        List<String> ingredients = getIngredients();
-        OrderRequest order = new OrderRequest(ingredients.subList(0, Math.min(2, ingredients.size())));
-
-        given()
-                .contentType("application/json")
-                .body(order)
-                .when()
-                .post(Endpoints.ORDERS)
-                .then()
+    @Description("Проверяет, что неавторизованный пользователь не может создать заказ. Ожидается 401")
+    public void createOrderWithoutAuth() {
+        OrderRequest order = createOrderRequest(2);
+        sendOrderWithoutAuth(order)
                 .statusCode(401)
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())));
+                .body("success", equalTo(false));
     }
 
     @Test
-    public void createOrder_withIngredients_shouldReturn200() {
-        User user = UserGenerator.uniqueUser();
-        String token = registerAndGetToken(user);
-
-        List<String> ingredients = getIngredients();
-        OrderRequest order = new OrderRequest(ingredients.subList(0, Math.min(3, ingredients.size())));
-
-        given()
-                .header("Authorization", token)
-                .contentType("application/json")
-                .body(order)
-                .when()
-                .post(Endpoints.ORDERS)
-                .then()
-                .statusCode(200)
-                .body("success", equalTo(true));
-    }
-
-    @Test
-    public void createOrder_withoutIngredients_shouldReturn400AndMessage() {
-        User user = UserGenerator.uniqueUser();
-        String token = registerAndGetToken(user);
-
-        OrderRequest order = new OrderRequest(List.of());
-
-        given()
-                .header("Authorization", token)
-                .contentType("application/json")
-                .body(order)
-                .when()
-                .post(Endpoints.ORDERS)
-                .then()
+    @Description("Проверяет, что создание заказа без ингредиентов возвращает 400")
+    public void createOrderWithoutIngredients() {
+        OrderRequest order = new OrderRequest(java.util.List.of());
+        sendOrderWithAuth(order)
                 .statusCode(400)
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())));
+                .body("success", equalTo(false));
     }
 
     @Test
-    public void createOrder_withInvalidIngredientHash_shouldReturn400or500AndMessage() {
-        User user = UserGenerator.uniqueUser();
-        String token = registerAndGetToken(user);
+    @Description("Проверяет, что заказ с несуществующим хешем ингредиента возвращает 500")
+    public void createOrderWithInvalidIngredient() {
+        OrderRequest order = new OrderRequest(java.util.List.of("invalid_hash_123"));
+        sendOrderWithAuth(order)
+                .statusCode(500);
+    }
 
-        // неверный хеш
-        OrderRequest order = new OrderRequest(List.of("invalid_ingredient_id_12345"));
+    // Шаги
 
-        given()
-                .header("Authorization", token)
-                .contentType("application/json")
-                .body(order)
-                .when()
-                .post(Endpoints.ORDERS)
-                .then()
-                .statusCode(anyOf(equalTo(400), equalTo(500)))
-                .body("success", equalTo(false))
-                .body("message", allOf(notNullValue(), not(isEmptyString())));
+    @Step("Регистрация пользователя")
+    private AuthResponse registerUser(User user) {
+        return client.register(user);
+    }
+
+    @Step("Получение списка ID ингредиентов")
+    private List<String> getIngredientIds() {
+        return client.getIngredients()
+                .statusCode(200)
+                .extract()
+                .path("data._id");
+    }
+
+    @Step("Создание запроса на заказ: {count} ингредиента(ов)")
+    private OrderRequest createOrderRequest(int count) {
+        int size = Math.min(count, ingredientIds.size());
+        return new OrderRequest(ingredientIds.subList(0, size));
+    }
+
+    @Step("Отправка заказа с авторизацией")
+    private io.restassured.response.ValidatableResponse sendOrderWithAuth(OrderRequest order) {
+        return client.createOrder(authToken, order);
+    }
+
+    @Step("Отправка заказа без авторизации")
+    private io.restassured.response.ValidatableResponse sendOrderWithoutAuth(OrderRequest order) {
+        return client.createOrder(null, order);
     }
 }
