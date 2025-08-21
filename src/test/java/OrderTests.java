@@ -1,9 +1,10 @@
-
+import static org.hamcrest.Matchers.*;
 import io.qameta.allure.Description;
 import io.qameta.allure.Step;
 import org.junit.Before;
 import org.junit.Test;
 import ru.practicum.config.ApiClient;
+import ru.practicum.config.ErrorMessages;
 import ru.practicum.model.AuthResponse;
 import ru.practicum.model.OrderRequest;
 import ru.practicum.model.User;
@@ -40,25 +41,27 @@ public class OrderTests extends BaseTest {
     }
 
     @Test
-    @Description("Проверяет, что неавторизованный пользователь не может создать заказ. Ожидается 401")
+    @Description("Проверяет, что неавторизованный пользователь не может создать заказ. Ожидается 401 и корректное сообщение об ошибке")
     public void createOrderWithoutAuth() {
         OrderRequest order = createOrderRequest(2);
         sendOrderWithoutAuth(order)
                 .statusCode(401)
-                .body("success", equalTo(false));
+                .body("success", equalTo(false))
+                .body("message", equalTo(ErrorMessages.UNAUTHORIZED));
     }
 
     @Test
-    @Description("Проверяет, что создание заказа без ингредиентов возвращает 400")
+    @Description("Проверяет, что создание заказа без ингредиентов возвращает 400 и корректное сообщение об ошибке")
     public void createOrderWithoutIngredients() {
         OrderRequest order = new OrderRequest(java.util.List.of());
         sendOrderWithAuth(order)
                 .statusCode(400)
-                .body("success", equalTo(false));
+                .body("success", equalTo(false))
+                .body("message", equalTo(ErrorMessages.NO_INGREDIENTS));
     }
 
     @Test
-    @Description("Проверяет, что заказ с несуществующим хешем ингредиента возвращает 500")
+    @Description("Проверяет, что заказ с несуществующим хешем ингредиента возвращает 500 и корректное сообщение об ошибке")
     public void createOrderWithInvalidIngredient() {
         OrderRequest order = new OrderRequest(java.util.List.of("invalid_hash_123"));
         sendOrderWithAuth(order)

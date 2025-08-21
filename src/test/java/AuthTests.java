@@ -1,8 +1,10 @@
 
 import io.qameta.allure.Description;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import ru.practicum.config.ApiClient;
+import ru.practicum.config.ErrorMessages;
 import ru.practicum.model.User;
 import ru.practicum.utils.UserGenerator;
 
@@ -19,6 +21,13 @@ public class AuthTests extends BaseTest {
         client.register(user);
     }
 
+    @After
+    public void tearDown() {
+        var response = client.login(user);
+        String token = response.getAccessToken();
+        client.deleteUser(token);
+    }
+
     @Test
     @Description("Проверяет успешный вход с корректными учётными данными")
     public void loginWithValidCredentials() {
@@ -32,7 +41,10 @@ public class AuthTests extends BaseTest {
     public void loginWithInvalidPassword() {
         User badUser = new User(user.getEmail(), "wrongpass", user.getName());
         var response = client.login(badUser);
-        assertFalse(response.getSuccess());
+        assertFalse("Вход с неверным паролем должен завершиться ошибкой", response.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
+        assertEquals("Сообщение об ошибке не совпадает",
+                ErrorMessages.INCORRECT_CREDENTIALS, response.getMessage());
     }
 
     @Test
@@ -40,7 +52,10 @@ public class AuthTests extends BaseTest {
     public void loginWithInvalidEmail() {
         User badUser = new User("invalid@example.com", user.getPassword(), user.getName());
         var response = client.login(badUser);
-        assertFalse(response.getSuccess());
+        assertFalse("Вход с несуществующим email должен завершиться ошибкой", response.getSuccess());
+        assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
+        assertEquals("Сообщение об ошибке не совпадает",
+                ErrorMessages.INCORRECT_CREDENTIALS, response.getMessage());
     }
 }
 

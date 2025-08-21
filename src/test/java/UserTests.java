@@ -2,6 +2,7 @@
 import io.qameta.allure.Description;
 import org.junit.Test;
 import ru.practicum.config.ApiClient;
+import ru.practicum.config.ErrorMessages;
 import ru.practicum.model.User;
 import ru.practicum.utils.UserGenerator;
 
@@ -23,10 +24,13 @@ public class UserTests extends BaseTest {
                 user.getEmail(), response.getUser().getEmail());
         assertEquals("Имя в ответе должно совпадать",
                 user.getName(), response.getUser().getName());
+
+        // Удаляем пользователя
+        client.deleteUserAfterLogin(user);
     }
 
     @Test
-    @Description("Проверяет, что повторная регистрация существующего пользователя возвращает ошибку и соответствующее сообщение.")
+    @Description("Проверяет, что повторная регистрация существующего пользователя возвращает ошибку 403 и соответствующее сообщение.")
     public void registerExistingUser() {
         User user = UserGenerator.generateUniqueUser();
 
@@ -39,13 +43,12 @@ public class UserTests extends BaseTest {
 
         assertFalse("Повторная регистрация должна вернуть success = false", secondResponse.getSuccess());
         assertNotNull("Должно быть сообщение об ошибке", secondResponse.getMessage());
-        assertTrue("Сообщение должно содержать информацию о существующем пользователе",
-                secondResponse.getMessage().toLowerCase().contains("exists") ||
-                        secondResponse.getMessage().toLowerCase().contains("already"));
+        assertEquals("Сообщение об ошибке должно быть точным",
+                ErrorMessages.USER_ALREADY_EXISTS, secondResponse.getMessage());
     }
 
     @Test
-    @Description("Проверяет, что регистрация без email завершается ошибкой.")
+    @Description("Проверяет, что регистрация без email завершается ошибкой 403 с корректным сообщением.")
     public void registerUserWithoutEmail() {
         User user = new User(null, "P@ssw0rd123", "TestUser");
 
@@ -53,10 +56,12 @@ public class UserTests extends BaseTest {
 
         assertFalse("Регистрация без email должна завершиться ошибкой", response.getSuccess());
         assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
+        assertEquals("Сообщение об ошибке не совпадает",
+                ErrorMessages.REQUIRED_FIELDS_MASSAGE, response.getMessage());
     }
 
     @Test
-    @Description("Проверяет, что регистрация без пароля завершается ошибкой.")
+    @Description("Проверяет, что регистрация без пароля завершается ошибкой 403 с корректным сообщением.")
     public void registerUserWithoutPassword() {
         User user = new User("testuser@example.com", null, "TestUser");
 
@@ -64,18 +69,20 @@ public class UserTests extends BaseTest {
 
         assertFalse("Регистрация без пароля должна завершиться ошибкой", response.getSuccess());
         assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
+        assertEquals("Сообщение об ошибке не совпадает",
+                ErrorMessages.REQUIRED_FIELDS_MASSAGE, response.getMessage());
     }
 
     @Test
-    @Description("Проверяет, что регистрация без имени завершается ошибкой.")
+    @Description("Проверяет, что регистрация без имени завершается ошибкой 403 с корректным сообщением.")
     public void registerUserWithoutName() {
-
         User user = new User("testuser@example.com", "P@ssw0rd123", null);
 
         var response = client.register(user);
 
-
-        assertFalse("Регистрация без имени должна завершится ошибкой", response.getSuccess());
+        assertFalse("Регистрация без имени должна завершиться ошибкой", response.getSuccess());
         assertNotNull("Должно быть сообщение об ошибке", response.getMessage());
+        assertEquals("Сообщение об ошибке не совпадает",
+                ErrorMessages.REQUIRED_FIELDS_MASSAGE, response.getMessage());
     }
 }
